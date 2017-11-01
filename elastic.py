@@ -1,10 +1,26 @@
 import requests
-import json, math
+import json, math, numbers
 from elasticsearch import Elasticsearch, TransportError
 
-# res=requests.get('http://192.168.4.228:9200')
-# print(res.content)
-from elasticsearch.exceptions import HTTP_EXCEPTIONS
+
+def get_weight_from_id(es: Elasticsearch, id: int):
+    weight = 0
+    body = {
+      "fields" : ["fulladdr_full"],
+      "offsets" : "true",
+      "payloads" : "true",
+      "positions" : "true",
+      "term_statistics" : "true",
+      "field_statistics" : "true"
+    }
+    item = es.termvectors(index='full_addr', doc_type='addr', id=id, body=body)
+    for term, termValue in item['term_vectors']['fulladdr_full']['terms'].items():
+        try:
+            int(term)
+        except ValueError:
+            weight = weight + termValue['doc_freq']
+    return weight
+
 
 I = 1000
 
@@ -41,13 +57,15 @@ while 1 == 1:
 
         if len(scroll['hits']['hits']) > 0:
             for hit in scroll['hits']['hits']:
+                weight = get_weight_from_id(es, hit['_id'])
+                print(weight)
                 items = items + 1
         else:
             break
 
     except TransportError:
         break
-
+    break
     response = {}
 
 print(i)
