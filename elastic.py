@@ -1,6 +1,10 @@
 import requests
 import json, math, numbers
-from elasticsearch import Elasticsearch, TransportError
+
+import time
+
+import sys
+from elasticsearch import Elasticsearch, TransportError, helpers
 
 
 def get_weight_from_id(es: Elasticsearch, id: int):
@@ -24,13 +28,50 @@ def get_weight_from_id(es: Elasticsearch, id: int):
 
 
 def update_doc(es: Elasticsearch, id: int, weight: int):
-    body = {
-        "doc": {
-            "weight": weight,
+    # body = {
+    #     "doc": {
+    #         "weight": weight,
+    #     }
+    # }
+    body = [
+        {
+            '_op_type': 'update',
+            '_index': 'full_addr',
+            '_type': 'addr',
+            '_id': id,
+            'doc': {
+                "weight": 123
+            }
         }
-    }
-    result = es.update(index='full_addr', doc_type='addr', id=id, body=body)
-    # print(id, ": ", result['result'])
+    ]
+    # result = es.update(index='full_addr', doc_type='addr', id=id, body=body)
+    # result = es.bulk(index='full_addr', doc_type='addr', body=body)
+    result = helpers.bulk(es, body)
+    print(id, ": ", result)
+
+
+def update_doc_bulk(es: Elasticsearch, id: []):
+    # body = {
+    #     "doc": {
+    #         "weight": weight,
+    #     }
+    # }
+    body = [
+        {
+            '_op_type': 'update',
+            '_index': 'full_addr',
+            '_type': 'addr',
+            '_id': val['id'],
+            'doc': {
+                "weight": val['weight']
+            }
+        }
+        for val in id
+    ]
+    # result = es.update(index='full_addr', doc_type='addr', id=id, body=body)
+    # result = es.bulk(index='full_addr', doc_type='addr', body=body)
+    result = helpers.bulk(es, body)
+    # print(id, ": ", result)
 
 
 I = 1000
@@ -63,14 +104,21 @@ while 1 == 1:
         else:
             scroll = es.scroll(scrollId, scroll='1m')
         i = i + 1
-        if i % 100 == 0:
-            print(i)
 
+        sys.stdout.write('\r' + str(i))
+        sys.stdout.flush()
         if len(scroll['hits']['hits']) > 0:
+            id_mass = []
             for hit in scroll['hits']['hits']:
                 weight = get_weight_from_id(es, hit['_id'])
-                update_doc(es, hit['_id'], weight)
+                # update_doc(es, hit['_id'], weight)
                 items = items + 1
+                # print("Items updated: ", items)
+
+                # print(items, end='\r')
+                # time.sleep(1)
+                id_mass.append({'id': hit['_id'], 'weight': weight})
+            update_doc_bulk(es, id_mass)
         else:
             break
 
