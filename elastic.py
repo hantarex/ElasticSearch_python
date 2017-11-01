@@ -11,7 +11,7 @@ def get_weight_from_id(es: Elasticsearch, id: int):
     # print("id: ", id)
     weight = 0
     body = {
-        "fields": ["fulladdr_full"],
+        "fields": ["fulladdr_full", "fulladdr_full_nw"],
         "offsets": "true",
         "payloads": "true",
         "positions": "true",
@@ -19,12 +19,17 @@ def get_weight_from_id(es: Elasticsearch, id: int):
         "field_statistics": "true"
     }
     item = es.termvectors(index='full_addr', doc_type='addr', id=id, body=body)
-    for term, termValue in item['term_vectors']['fulladdr_full']['terms'].items():
-        try:
-            int(term)
-        except ValueError:
-            weight = weight + termValue['doc_freq']
-    return weight
+
+    try:
+        for term, termValue in item['term_vectors']['fulladdr_full_nw']['terms'].items():
+            try:
+                int(term)
+            except ValueError:
+                weight = weight + termValue['doc_freq']
+        weight = weight / len(item['term_vectors']['fulladdr_full_nw']['terms'])
+        return weight
+    except IndexError:
+        return 0
 
 
 def update_doc(es: Elasticsearch, id: int, weight: int):
