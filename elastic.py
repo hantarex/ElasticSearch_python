@@ -6,12 +6,16 @@ import time
 import sys
 from elasticsearch import Elasticsearch, TransportError, helpers
 
+ANALYZE_FIELD = "fulladdr_implode"
+
+I1 = 10
+I = 1000
+
 
 def get_weight_from_id(es: Elasticsearch, id: int):
-    # print("id: ", id)
     weight_doc = 0
     body = {
-        "fields": ["fulladdr_full", "fulladdr_full_nw"],
+        "fields": [ANALYZE_FIELD],
         "offsets": "true",
         "payloads": "true",
         "positions": "true",
@@ -21,29 +25,24 @@ def get_weight_from_id(es: Elasticsearch, id: int):
     item = es.termvectors(index='full_addr', doc_type='addr', id=id, body=body)
 
     try:
-        for term, termValue in item['term_vectors']['fulladdr_full_nw']['terms'].items():
+        for term, termValue in item['term_vectors'][ANALYZE_FIELD]['terms'].items():
             try:
                 int(term)
             except ValueError:
                 weight_doc = weight_doc + termValue['doc_freq']
-        if len(item['term_vectors']['fulladdr_full_nw']['terms'])>1:
-            delimiter = len(item['term_vectors']['fulladdr_full_nw']['terms']) * 5
+        if len(item['term_vectors'][ANALYZE_FIELD]['terms']) > 1:
+            delimiter = len(item['term_vectors'][ANALYZE_FIELD]['terms']) * I1
         else:
-            delimiter = len(item['term_vectors']['fulladdr_full_nw']['terms'])
+            delimiter = len(item['term_vectors'][ANALYZE_FIELD]['terms'])
 
         weight_doc = weight_doc / delimiter
         return weight_doc
     except KeyError:
-        print("Error: id (",id,") dont't have key")
+        print("Error: id (", id, ") dont't have key")
         return 0
 
 
 def update_doc(es: Elasticsearch, id: int, weight: int):
-    # body = {
-    #     "doc": {
-    #         "weight": weight,
-    #     }
-    # }
     body = [
         {
             '_op_type': 'update',
@@ -55,18 +54,11 @@ def update_doc(es: Elasticsearch, id: int, weight: int):
             }
         }
     ]
-    # result = es.update(index='full_addr', doc_type='addr', id=id, body=body)
-    # result = es.bulk(index='full_addr', doc_type='addr', body=body)
     result = helpers.bulk(es, body)
     print(id, ": ", result)
 
 
 def update_doc_bulk(es: Elasticsearch, id: []):
-    # body = {
-    #     "doc": {
-    #         "weight": weight,
-    #     }
-    # }
     body = [
         {
             '_op_type': 'update',
@@ -79,13 +71,8 @@ def update_doc_bulk(es: Elasticsearch, id: []):
         }
         for val in id
     ]
-    # result = es.update(index='full_addr', doc_type='addr', id=id, body=body)
-    # result = es.bulk(index='full_addr', doc_type='addr', body=body)
     result = helpers.bulk(es, body)
-    # print(id, ": ", result)
 
-
-I = 1000
 
 requestAll = {
     "size": I,
@@ -95,7 +82,7 @@ requestAll = {
 }
 
 es = Elasticsearch([{'host': '192.168.4.228', 'port': 9200}])
-response = es.search(index='full_addr', body=requestAll, params={"scroll": "10m"})
+response = es.search(index='full_addr', body=requestAll, params={"scroll": "30m"})
 allDocs = response['hits']['total']
 pages = math.ceil(allDocs / I)
 scrollId = response['_scroll_id']
@@ -130,7 +117,6 @@ while 1 == 1:
 
     except TransportError:
         break
-    # break
     response = {}
 
 print(i)
